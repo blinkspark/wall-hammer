@@ -20,8 +20,8 @@ func main() {
 }
 
 func onReady() {
-	hostHttp()
-	startNatsServer()
+	go hostHttp()
+	go startNatsServer()
 	var err error
 	iconData, err = readIconData()
 	if err != nil {
@@ -43,31 +43,32 @@ func onReady() {
 	}
 }
 
+func onExit() {
+	// clean up here
+}
+
 func startNatsServer() {
 	natsServer, err := server.NewServer(&server.Options{
+		Port: 23222,
 		Websocket: server.WebsocketOpts{
 			Host:  "127.0.0.1",
-			Port:  23222,
+			Port:  23223,
 			NoTLS: true,
 		},
 	})
 	if err != nil {
 		log.Panicf("what is this %#v\n", err)
 	}
-	go natsServer.Start()
-	if !natsServer.ReadyForConnections(15 * time.Second) {
+	natsServer.Start()
+	if !natsServer.ReadyForConnections(5 * time.Second) {
 		log.Panicln("NATS server not ready")
 	}
 	log.Println("NATS server started", natsServer.ClientURL())
 }
 
-func onExit() {
-	// clean up here
-}
-
 func hostHttp() {
 	http.Handle("/", http.FileServer(http.Dir("./static")))
-	go http.ListenAndServe(":23080", nil)
+	http.ListenAndServe(":23080", nil)
 }
 
 func readIconData() ([]byte, error) {

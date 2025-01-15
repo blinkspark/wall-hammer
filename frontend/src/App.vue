@@ -1,21 +1,6 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
-import { onMounted, provide, onBeforeMount, inject, getCurrentInstance } from 'vue'
-import { useCounterStore } from "@/stores/counter"
-import { wsconnect, type NatsConnection } from '@nats-io/nats-core';
-
-let ci = getCurrentInstance();
-
-onMounted(async () => {
-  // sleep for 5 seconds
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  const nc = ci!.appContext.config.globalProperties.$nats
-  console.log("APP", nc);
-  // ci!.appContext.app.provide("nc", nc)
-})
-
+import { RouterLink, RouterView } from 'vue-router';
+import HelloWorld from './components/HelloWorld.vue';
 </script>
 
 <template>

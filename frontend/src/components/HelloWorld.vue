@@ -1,25 +1,22 @@
 <script setup lang="ts">
-import { inject, onMounted } from 'vue';
+import { ref, onMounted, getCurrentInstance } from 'vue';
 import type { NatsConnection } from '@nats-io/nats-core';
-
-
+let app = getCurrentInstance()!.appContext.app;
+let nc = ref<NatsConnection | null>(null);
 defineProps<{
   msg: string
 }>()
-onMounted(async () => {
-  let nc = inject("nc")
-  console.log("nnn", nc);
-
-  // nc?.subscribe("test", {
-  //   callback: (err, msg) => {
-  //     console.log(msg);
-  //   }
-  // })
-})
+let ii = setInterval(() => {
+  nc.value = app.config.globalProperties.$nc;
+  if (nc.value) {
+    clearInterval(ii);
+  }
+}, 100)
 </script>
 
 <template>
   <div class="greetings">
+    <h1 class="green" v-if="nc">NNNCCC</h1>
     <h1 class="green">{{ msg }}</h1>
     <h3>
       You’ve successfully created a project with

@@ -10,12 +10,12 @@ import router from './router'
 
 const app = createApp(App)
 
+wsconnect({ servers: 'ws://localhost:23223' }).then((nc: NatsConnection) => {
+    app.config.globalProperties.$nc = nc;
+}).catch((err) => {
+    console.error("Error connecting to NATS", err);
+})
 app.use(createPinia())
 app.use(router)
-wsconnect({ servers: 'ws://localhost:23222' }).then((nc: NatsConnection) => {
-    app.config.globalProperties.$nats = nc;
-    console.log('Connected to NATS')
-})
-
 
 app.mount('#app')
