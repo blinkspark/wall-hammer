@@ -2,7 +2,6 @@ import './assets/main.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { wsconnect, type NatsConnection } from '@nats-io/nats-core'
 import { useNats } from './useNats'
 
 import App from './App.vue'

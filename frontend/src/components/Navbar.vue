@@ -2,8 +2,10 @@
 import { RouterLink } from 'vue-router'
 import { useTemplateRef } from 'vue'
 const burger = useTemplateRef('burger')
+const navbarMenu = useTemplateRef('navbarMenu')
 function burgerClick(e: MouseEvent) {
   burger.value!.classList.toggle('is-active')
+  navbarMenu.value!.classList.toggle('is-active')
 }
 </script>
 <template>
@@ -12,7 +14,7 @@ function burgerClick(e: MouseEvent) {
       <div class="navbar-brand">
         <RouterLink to="/" class="navbar-item">
           <img class="icon" src="/favicon.ico" alt="" />
-          <span class="has-text-weight-bold has-text-light">Logo</span>
+          <span class="has-text-weight-bold has-text-light">Wall Hammer</span>
         </RouterLink>
 
         <a
@@ -28,6 +30,16 @@ function burgerClick(e: MouseEvent) {
           <span aria-hidden="true"></span>
           <span aria-hidden="true"></span>
         </a>
+      </div>
+      
+      <div class="navbar-menu" ref="navbarMenu">
+        <div class="navbar-start">
+          <RouterLink to="/about" class="navbar-item">About</RouterLink>
+        </div>
+        <div class="navbar-end">
+          <RouterLink to="/login" class="navbar-item">Login</RouterLink>
+          <RouterLink to="/register" class="navbar-item">Register</RouterLink>
+        </div>
       </div>
     </div>
   </nav>
