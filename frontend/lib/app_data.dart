@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:logger/logger.dart';
-
-final logger = Logger();
 
 class AppData extends ChangeNotifier {
   String _accessToken = '';

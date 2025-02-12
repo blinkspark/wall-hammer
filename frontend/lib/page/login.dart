@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../app_data.dart';
 import 'package:provider/provider.dart';
 
@@ -7,13 +8,27 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final getIt = GetIt.I;
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login'),
-      ),
-      body: LoginForm(colorScheme: colorScheme),
-    );
+    return FutureBuilder(
+        future: getIt.allReady(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Login'),
+              ),
+              body: LoginForm(colorScheme: colorScheme),
+            );
+          } else {
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Login'),
+              ),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
+        });
   }
 }
 

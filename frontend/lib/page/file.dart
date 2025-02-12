@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/app_data.dart';
+import 'package:get_it/get_it.dart';
+import 'package:logger/logger.dart';
+import 'package:path/path.dart';
 
 class FilePage extends StatefulWidget {
   const FilePage({super.key});
@@ -12,33 +14,45 @@ class FilePage extends StatefulWidget {
 }
 
 class _FilePageState extends State<FilePage> {
-  String currentFolder = '';
+  String currentFolderPath = '';
   @override
   Widget build(BuildContext context) {
-    final folder = Directory(currentFolder);
-    final entities = folder.listSync();
-    final dirs = entities.whereType<Directory>().toList();
-    final files = entities.whereType<File>().toList();
-    // join dirs and files
-    final allFiles = [...dirs, ...files];
-    // logger.d(files);
+    final getIt = GetIt.instance;
+    final logger = getIt.get<Logger>();
+    final currentFolder = Directory(currentFolderPath);
+    List<FileSystemEntity> allFiles = [];
+    // final colorTheme = Theme.of(context).colorScheme;
+    bool hasError = false;
+    try {
+      final entities = currentFolder.listSync();
+      final dirs = entities.whereType<Directory>().toList();
+      final files = entities.whereType<File>().toList();
+      // join dirs and files
+      allFiles = [...dirs, ...files];
+    } on Exception catch (e) {
+      logger.e(e);
+      hasError = true;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Tooltip(
-            message: folder.absolute.path, child: Text(folder.absolute.path)),
+            message: currentFolder.absolute.path, child: Text(currentFolder.absolute.path)),
         actions: [
           IconButton(
               onPressed: () {
-                final parentFolder = folder.parent;
+                final parentFolderPath = currentFolder.absolute.parent.path;
                 setState(() {
-                  currentFolder = parentFolder.path;
+                  currentFolderPath = parentFolderPath;
                 });
               },
               icon: const Icon(Icons.arrow_upward)),
           IconButton(
               onPressed: () {
                 logger.d('refresh');
+                setState(() {
+                  currentFolderPath = currentFolderPath;
+                });
               },
               icon: const Icon(Icons.refresh)),
           IconButton(
@@ -49,12 +63,12 @@ class _FilePageState extends State<FilePage> {
           IconButton(
               onPressed: () {
                 FilePicker.platform
-                    .getDirectoryPath(initialDirectory: currentFolder)
+                    .getDirectoryPath(initialDirectory: currentFolderPath)
                     .then((v) {
                   logger.d(v);
                   if (v != null) {
                     setState(() {
-                      currentFolder = v;
+                      currentFolderPath = v == '.' ? '' : v;
                     });
                   }
                 });
@@ -64,32 +78,35 @@ class _FilePageState extends State<FilePage> {
       ),
       body: Padding(
         padding: const EdgeInsets.only(left: 40, right: 40),
-        child: ListView.builder(
-            itemCount: allFiles.length,
-            itemBuilder: (context, index) {
-              final f = allFiles[index];
-              bool isFile = f is File;
-              return ListTile(
-                leading: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Checkbox(value: false, onChanged: (v) {}),
-                    isFile
-                        ? const Icon(Icons.insert_drive_file)
-                        : const Icon(Icons.folder_outlined),
-                  ],
-                ),
-                title: Text(f.path),
-                onTap: () {
+        child: hasError
+            ? Center(child: Text("无法访问当前文件夹。"))
+            : ListView.builder(
+                itemCount: allFiles.length,
+                itemBuilder: (context, index) {
                   final f = allFiles[index];
-                  if (f is Directory) {
-                    setState(() {
-                      currentFolder = f.path;
-                    });
-                  }
-                },
-              );
-            }),
+                  final fpath = relative(f.path, from: currentFolderPath);
+                  final isFile = f is File;
+                  return ListTile(
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Checkbox(value: false, onChanged: (v) {}),
+                        Icon(isFile
+                            ? Icons.insert_drive_file
+                            : Icons.folder_outlined)
+                      ],
+                    ),
+                    title: Text(fpath),
+                    onTap: () {
+                      final f = allFiles[index];
+                      if (f is Directory) {
+                        setState(() {
+                          currentFolderPath = f.path;
+                        });
+                      }
+                    },
+                  );
+                }),
       ),
     );
   }
