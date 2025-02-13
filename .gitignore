@@ -131,3 +131,4 @@ dist
 
 # binary
 *.exe
+viddown/resp.json
