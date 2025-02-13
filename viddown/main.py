@@ -1,8 +1,13 @@
 import asyncio
 import json
+import threading
 import nats
 from nats.aio.msg import Msg
 from yt_dlp import YoutubeDL
+import logging
+import re
+
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s - %(message)s")
 
 
 async def main():
@@ -23,7 +28,7 @@ async def main():
 
 async def extract_info(msg: Msg):
     data = json.loads(msg.data.decode())
-    print(data)
+    logging.debug(f"extract_info {data}")
     if data["url"] == "":
         await msg.respond(json.dumps({"ok": False, "error": "url is empty"}).encode())
         return
@@ -31,20 +36,85 @@ async def extract_info(msg: Msg):
         try:
             info = ydl.extract_info(data["url"], download=False)
             resp = {"ok": True, "data": info}
-            with open("resp.json", "w") as f:
+            with open("resp.json", "w", encoding="utf-8") as f:
                 f.write(json.dumps(info, indent=2, ensure_ascii=False))
             await msg.respond(json.dumps(resp, ensure_ascii=False).encode())
         except Exception as e:
-            print("exception:", e)
+            logging.error(e)
             await msg.respond(
                 json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode()
             )
-    print("done")
+    logging.debug("done")
+
 
 async def download(msg: Msg):
-    print("download")
+    logging.debug("download")
     data = json.loads(msg.data.decode())
-    print(data)
+    logging.debug(f"data {data}")
+    url = data["url"]
+    format = data["format_id"]
+    id = data["id"]
+    await msg.respond(json.dumps({"ok": True}).encode())
+    logging.debug(f"downloading {url} with format {format}")
+    topic = f"neal.service.viddown.task_progress.{id}"
+    logging.debug(f"topic {topic}")
+
+    def progress_hook(d):
+        # logging.debug(f"progress_hook {d}")
+
+        percent: str = d["_percent_str"]
+        logging.debug(f"progress: {d['_percent_str']}")
+        # strip progress
+        progress = re.findall(r"-?\d+\.?\d*%", percent)[0]
+        logging.debug(f"progress re: {progress}")
+        progress = float(progress[:-1]) / 100.0
+        if d["status"] == "downloading":
+            logging.debug(f"status: {d['status']}")
+
+            async def publish():
+                logging.debug(f"publishing {progress}")
+                await msg._client.publish(
+                    topic,
+                    json.dumps(
+                        {
+                            "ok": True,
+                            "progress": progress,
+                        }
+                    ).encode(),
+                )
+                logging.debug(f"published")
+
+            def tread_run(task):
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(task())
+                loop.close()
+
+            thread = threading.Thread(target=tread_run, args=(publish,))
+            thread.start()
+            thread.join()
+
+        # elif d["status"] == "finished":
+        #     logging.debug(f"status: {d['status']}")
+        #     msg._client.publish(
+        #         topic,
+        #         json.dumps({"ok": True, "progress": 1}).encode(),
+        #     )
+
+    with YoutubeDL({"format": format, "progress_hooks": [progress_hook]}) as ydl:
+        try:
+            ydl.download([url])
+            logging.debug("downloaded!!")
+            await msg._client.publish(
+                topic,
+                json.dumps({"ok": True, "progress": 1.0}).encode(),
+            )
+        except Exception as e:
+            await msg._client.publish(
+                topic,
+                json.dumps({"ok": False, "error": str(e)}).encode(),
+            )
+            logging.error(e)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

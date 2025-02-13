@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dart_nats/dart_nats.dart';
@@ -17,6 +18,7 @@ class _HomePageState extends State<HomePage> {
   Future<Message<dynamic>>? response;
   Set<int> selected = {};
   Map<String, dynamic>? data;
+  Stream<double>? progressStream;
 
   @override
   Widget build(BuildContext context) {
@@ -25,19 +27,20 @@ class _HomePageState extends State<HomePage> {
     final colorScheme = Theme.of(context).colorScheme;
     final downloadUrlTextInputController =
         TextEditingController(text: downloadUrl);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
         actions: [],
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 40, right: 40),
-          child: Column(
-            spacing: 40,
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Row(
+        child: Column(
+          spacing: 40,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 40, right: 40),
+              child: Row(
                 spacing: 20,
                 children: [
                   Expanded(
@@ -55,9 +58,13 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              formatsListFutureBuilder()
-            ],
-          ),
+            ),
+            formatsListFutureBuilder(),
+            DownloadStreamBuilder(
+              progressStream: progressStream,
+              logger: logger,
+            )
+          ],
         ),
       ),
     );
@@ -68,7 +75,7 @@ class _HomePageState extends State<HomePage> {
       future: response,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const CircularProgressIndicator();
+          return Expanded(child: Center(child: const CircularProgressIndicator()));
         } else if (snapshot.connectionState == ConnectionState.none) {
           return Text("none");
         } else if (snapshot.connectionState == ConnectionState.done) {
@@ -143,18 +150,45 @@ class _HomePageState extends State<HomePage> {
           logger.d('data is not null');
           final downloadUrl = data!['original_url'];
           final List<String> formatIds = getFormatsIds();
+          final id = data!['id'];
           if (formatIds.length >= 2) {
             final formatId = formatIds.join('+');
-            final data = jsonEncode({
+            final jsonData = jsonEncode({
+              'id': id,
               'url': downloadUrl,
               'format_id': formatId,
             });
-            logger.d('data: $data');
-            final response = await nc.request(
-              'neal.service.viddown.download',
-              utf8.encode(data),
-            );
-            logger.d('response: $response');
+            logger.d('data: $jsonData');
+
+            setState(() {
+              progressStream = () async* {
+                final sub = nc.sub('neal.service.viddown.task_progress.$id');
+                final response = await nc.request(
+                  'neal.service.viddown.download',
+                  utf8.encode(jsonData),
+                  timeout: const Duration(seconds: 10),
+                );
+                logger.d('response: $response');
+                // sub.stream.listen((d) {
+                //   final rawData = d.data;
+                //   final jdata = jsonDecode(utf8.decode(rawData));
+                //   logger.e('listened jdata: $jdata');
+                //   // yield jdata['progress'];
+                // });
+                await for (var d in sub.stream) {
+                  final rawData = d.data;
+                  final jdata = jsonDecode(utf8.decode(rawData));
+                  logger.d('listened jdata: $jdata');
+                  yield jdata['progress'] as double;
+                  await Future.delayed(const Duration(seconds: 1));
+                  if (jdata['progress'] >= 1.0) {
+                    logger.d('progress is done');
+                    sub.close();
+                    break;
+                  }
+                }
+              }();
+            });
           }
         } else {
           logger.d('data is null');
@@ -214,6 +248,48 @@ class _HomePageState extends State<HomePage> {
       final formats = data!['formats'];
       return selected.map((i) => formats[i]['format_id'] as String).toList();
     }
+  }
+}
+
+class DownloadStreamBuilder extends StatelessWidget {
+  const DownloadStreamBuilder({
+    super.key,
+    required this.progressStream,
+    required this.logger,
+  });
+
+  final Stream<double>? progressStream;
+  final Logger logger;
+
+  @override
+  Widget build(BuildContext context) {
+    // final colorScheme = Theme.of(context).colorScheme;
+    return StreamBuilder(
+        stream: progressStream,
+        builder: (context, snapshot) {
+          logger.d('snapshot: $snapshot');
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LinearProgressIndicator();
+          } else if (snapshot.connectionState == ConnectionState.active) {
+            if (snapshot.hasData) {
+              return LinearProgressIndicator(value: snapshot.data!);
+            }
+          } else if (snapshot.connectionState == ConnectionState.done) {
+            if (snapshot.hasData) {
+              return LinearProgressIndicator(
+                  value: snapshot.data!, color: Colors.green);
+            } else if (snapshot.hasError) {
+              return LinearProgressIndicator(
+                value: 1,
+                color: Colors.red,
+              );
+            }
+          } else if (snapshot.hasError) {
+            logger.d('error: ${snapshot.error}');
+            return Text(snapshot.error.toString());
+          }
+          return const SizedBox();
+        });
   }
 }
 

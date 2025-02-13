@@ -133,3 +133,4 @@ dist
 *.exe
 viddown/resp.json
 resp.json
+*.mp4
