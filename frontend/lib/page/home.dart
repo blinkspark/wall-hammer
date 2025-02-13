@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dart_nats/dart_nats.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +15,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String downloadUrl = '';
   Future<Message<dynamic>>? response;
-  Set<int> selected = <int>{};
+  Set<int> selected = {};
+  Map<String, dynamic>? data;
 
   @override
   Widget build(BuildContext context) {
@@ -54,12 +54,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   SizedBox(
-                    width: 200,
+                    width: 100,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary),
+                          backgroundColor: colorScheme.secondary,
+                          foregroundColor: colorScheme.onSecondary),
                       onPressed: () async {
+                        selected.clear();
                         final nc = await getIt.getAsync<Client>();
                         downloadUrl = controller.text;
                         final data = jsonEncode({'url': downloadUrl});
@@ -81,6 +82,40 @@ class _HomePageState extends State<HomePage> {
                           }
                         });
                       },
+                      child: const Text('分析'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 100,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary),
+                      onPressed: () async {
+                        logger.t('download pressed');
+                        final nc = await getIt.getAsync<Client>();
+                        if (data != null) {
+                          logger.d('data is not null');
+                          final downloadUrl = data!['original_url'];
+                          final List<String> formatIds = getFormatsIds();
+                          if (formatIds.length >= 2) {
+                            final formatId = formatIds.join('+');
+                            final data = jsonEncode({
+                              'url': downloadUrl,
+                              'format_id': formatId,
+                            });
+                            logger.d('data: $data');
+                            final response = await nc.request(
+                              'neal.service.viddown.download',
+                              utf8.encode(data),
+                            );
+                            
+                          }
+                        } else {
+                          logger.d('data is null');
+                          // TODO: show error
+                        }
+                      },
                       child: const Text('下载'),
                     ),
                   ),
@@ -95,16 +130,27 @@ class _HomePageState extends State<HomePage> {
                     return Text("none");
                   } else if (snapshot.connectionState == ConnectionState.done) {
                     if (snapshot.hasData) {
-                      final data = utf8.decode(snapshot.data!.data);
-                      final jdata = jsonDecode(data);
-                      logger.d("data: $jdata");
-                      logger.d(jdata['data']['requested_formats']);
+                      final rawData = utf8.decode(snapshot.data!.data);
+                      final jdata = jsonDecode(rawData);
                       if (jdata['ok'] == true) {
+                        final formatData = jdata['data'];
+                        data = formatData;
+                        final List<dynamic>? formats = jdata['data']['formats'];
+                        final String? formatIds = formatData['format_id'];
+                        if (formatIds != null && formats != null) {
+                          formatIds.split('+').forEach((fid) {
+                            formats.asMap().entries.forEach((f) {
+                              if (f.value['format_id'] == fid) {
+                                selected.add(f.key);
+                              }
+                            });
+                          });
+                        }
                         return Expanded(
                           child: ListView.builder(
-                            itemCount: jdata['data']['formats'].length,
+                            itemCount: formats?.length ?? 0,
                             itemBuilder: (ctx, index) {
-                              final item = jdata['data']['formats'][index];
+                              final item = formats![index];
                               return ListTile(
                                 onTap: () {
                                   toggleItem(index);
@@ -146,5 +192,14 @@ class _HomePageState extends State<HomePage> {
         selected.add(index);
       }
     });
+  }
+
+  List<String> getFormatsIds() {
+    if (data == null) {
+      return [];
+    } else {
+      final formats = data!['formats'];
+      return selected.map((i) => formats[i]['format_id'] as String).toList();
+    }
   }
 }
