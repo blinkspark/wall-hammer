@@ -129,8 +129,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# binary
+# custom
 *.exe
 viddown/resp.json
 resp.json
 *.mp4
+*.webm

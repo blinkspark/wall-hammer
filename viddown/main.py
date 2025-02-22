@@ -8,6 +8,9 @@ import logging
 import re
 
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s - %(message)s")
+EXTRACT_INFO_SERVICE = "neal.service.viddown.extract_info"
+DOWNLOAD_SERVICE = "neal.service.viddown.download"
+DOWNLOAD_TASK_CHANNEL = "neal.service.viddown.task"
 
 
 async def main():
@@ -16,8 +19,8 @@ async def main():
         servers=["tls://demo.nats.io:4443"],
     )
 
-    await nc.subscribe("neal.service.viddown.extract_info", cb=extract_info)
-    await nc.subscribe("neal.service.viddown.download", cb=download)
+    await nc.subscribe(EXTRACT_INFO_SERVICE, cb=extract_info)
+    await nc.subscribe(DOWNLOAD_SERVICE, cb=download)
 
     try:
         await asyncio.Future()
@@ -54,20 +57,18 @@ async def download(msg: Msg):
     url = data["url"]
     format = data["format_id"]
     id = data["id"]
-    await msg.respond(json.dumps({"ok": True}).encode())
+    await msg.respond(json.dumps({"ok": True}, ensure_ascii=False).encode())
     logging.debug(f"downloading {url} with format {format}")
     topic = f"neal.service.viddown.task_progress.{id}"
     logging.debug(f"topic {topic}")
 
     def progress_hook(d):
         # logging.debug(f"progress_hook {d}")
-
         percent: str = d["_percent_str"]
         logging.debug(f"progress: {d['_percent_str']}")
-        # strip progress
         progress = re.findall(r"-?\d+\.?\d*%", percent)[0]
         logging.debug(f"progress re: {progress}")
-        progress = float(progress[:-1]) / 100.0
+        progress = round(float(progress[:-1]) / 100.0, 2)
         if d["status"] == "downloading":
             logging.debug(f"status: {d['status']}")
 
@@ -93,14 +94,12 @@ async def download(msg: Msg):
             thread.start()
             thread.join()
 
-        # elif d["status"] == "finished":
-        #     logging.debug(f"status: {d['status']}")
-        #     msg._client.publish(
-        #         topic,
-        #         json.dumps({"ok": True, "progress": 1}).encode(),
-        #     )
-
-    with YoutubeDL({"format": format, "progress_hooks": [progress_hook]}) as ydl:
+    with YoutubeDL(
+        {
+            "format": format,
+            "progress_hooks": [progress_hook],
+        }
+    ) as ydl:
         try:
             ydl.download([url])
             logging.debug("downloaded!!")

@@ -1,11 +1,11 @@
-import 'dart:io';
-
 import 'package:dart_nats/dart_nats.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/page/file.dart';
+import 'package:frontend/data/download_data.dart';
+import 'page/downloadre.dart';
+import 'page/file.dart';
 import 'package:get_it/get_it.dart';
 import 'package:logger/logger.dart';
-import 'app_data.dart';
+import 'data/app_data.dart';
 import 'page/home.dart';
 import 'page/login.dart';
 import 'page/profile.dart';
@@ -18,8 +18,8 @@ void main() {
   getIt.registerSingleton<Logger>(logger);
   getIt.registerSingletonAsync<Client>(() async {
     final client = Client();
-    await client.connect(Uri.parse('nats://demo.nats.io:4443'),
-        connectOption: ConnectOption(tlsRequired: true));
+    client.acceptBadCert = true;
+    await client.connect(Uri.parse('nats://demo.nats.io:4443'));
     return client;
   });
   runApp(const MainApp());
@@ -43,8 +43,11 @@ class MainApp extends StatelessWidget {
         useMaterial3: true);
     darkTheme = darkTheme.copyWith(
         textTheme: GoogleFonts.notoSansScTextTheme(darkTheme.textTheme));
-    return ChangeNotifierProvider<AppData>(
-      create: (context) => AppData(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppData()),
+        ChangeNotifierProvider(create: (_) => DownloadData()),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: lightTheme,
@@ -73,7 +76,7 @@ class _MainFrameState extends State<MainFrame> {
   Widget build(BuildContext context) {
     // final theme = Theme.of(context);
     return Scaffold(
-      body: [HomePage(), FilePage(), ProfilePage()][_index],
+      body: [HomePage(), FilePage(), DownloadPage(), ProfilePage()][_index],
       bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (index) {
